@@ -2,26 +2,22 @@
 #include <fstream>
 #include <vector>
 #include <string>
-#include <sstream>
-#include <cctype>    // For std::isspace
-#include <algorithm> // For std::all_of, std::find_if
-
 using namespace std;
 
-// Define structs
+// Simple data structures
 struct User {
     string username;
     string password;
-    double accountBalance;
-    bool hasBorrowRequest;
-    string requestedBrand;
-    bool hasReturnRequest;
-    string borrowedBrand;
+    double balance;
+    bool wantsToBorrow;
+    string wantedCar;
+    bool wantsToReturn;
+    string borrowedCar;
 };
 
 struct Car {
-    string brand;
-    int availableCount;
+    string name;
+    int count;
 };
 
 struct Admin {
@@ -29,244 +25,207 @@ struct Admin {
     string password;
 };
 
-// Function to check if a string is a valid integer
-bool isValidInteger(const string& str) {
-    if (str.empty()) return false;
-    for (char c : str) {
-        if (!isdigit(c)) return false;
-    }
-    return true;
-}
+// Global variables to store data
+Admin admin;
+vector<User> users;
+vector<Car> cars;
 
-// File I/O Functions
-Admin loadAdmin() {
-    Admin admin;
-    ifstream file("admin.txt");
-    if (file.is_open()) {
-        string line;
-        getline(file, line);
-        stringstream ss(line);
-        string token;
-        getline(ss, token, ',');
-        admin.username = token;
-        getline(ss, token, ',');
-        admin.password = token;
-        file.close();
-    } else {
-        admin.username = "admin";
-        admin.password = "admin123"; // Default admin
+// Load data from files
+void loadData() {
+    // Load admin
+    admin.username = "admin";
+    admin.password = "admin123";
+    
+    ifstream adminFile("admin.txt");
+    if (adminFile.is_open()) {
+        getline(adminFile, admin.username, ',');
+        getline(adminFile, admin.password);
+        adminFile.close();
     }
-    return admin;
-}
-
-vector<User> loadUsers() {
-    vector<User> users;
-    ifstream file("usersDB.txt");
-    if (file.is_open()) {
+    
+    // Load users
+    users.clear();
+    ifstream userFile("usersDB.txt");
+    if (userFile.is_open()) {
         string line;
-        while (getline(file, line)) {
-            // Skip empty lines or lines with only whitespace
-            if (line.empty() || all_of(line.begin(), line.end(), [](char c) { return isspace(c); })) {
-                continue;
-            }
-            stringstream ss(line);
-            string token;
+        while (getline(userFile, line)) {
+            if (line.empty()) continue;
+            
             User user;
-            getline(ss, token, ',');
-            user.username = token;
-            getline(ss, token, ',');
-            user.password = token;
-            getline(ss, token, ',');
-            try {
-                user.accountBalance = stod(token);
-            } catch (const invalid_argument&) {
-                continue; // Skip invalid balance
-            }
-            getline(ss, token, ',');
-            user.hasBorrowRequest = (token == "1");
-            getline(ss, token, ',');
-            user.requestedBrand = token;
-            getline(ss, token, ',');
-            user.hasReturnRequest = (token == "1");
-            getline(ss, token, ',');
-            user.borrowedBrand = token;
+            size_t pos = 0;
+            
+            // Get username
+            pos = line.find(',');
+            user.username = line.substr(0, pos);
+            line = line.substr(pos + 1);
+            
+            // Get password
+            pos = line.find(',');
+            user.password = line.substr(0, pos);
+            line = line.substr(pos + 1);
+            
+            // Get balance
+            pos = line.find(',');
+            user.balance = stod(line.substr(0, pos));
+            line = line.substr(pos + 1);
+            
+            // Get borrow request
+            pos = line.find(',');
+            user.wantsToBorrow = (line.substr(0, pos) == "1");
+            line = line.substr(pos + 1);
+            
+            // Get wanted car
+            pos = line.find(',');
+            user.wantedCar = line.substr(0, pos);
+            line = line.substr(pos + 1);
+            
+            // Get return request
+            pos = line.find(',');
+            user.wantsToReturn = (line.substr(0, pos) == "1");
+            line = line.substr(pos + 1);
+            
+            // Get borrowed car
+            user.borrowedCar = line;
+            
             users.push_back(user);
         }
-        file.close();
+        userFile.close();
     }
-    return users;
-}
-
-vector<Car> loadCars() {
-    vector<Car> cars;
-    ifstream file("carsDB.txt");
-    if (!file.is_open()) {
-        cout << "Note: carsDB.txt not found. Starting with empty car list." << endl;
-        return cars;
-    }
-
-    string line;
-    int lineNumber = 0;
-    while (getline(file, line)) {
-        lineNumber++;
-        // Skip empty lines or lines with only whitespace
-        if (line.empty() || all_of(line.begin(), line.end(), [](char c) { return isspace(c); })) {
-            continue;
-        }
-
-        stringstream ss(line);
-        string brand, countStr;
-        if (!getline(ss, brand, ',') || !getline(ss, countStr, ',')) {
-            cout << "Warning: Skipping malformed line " << lineNumber 
-                 << " in carsDB.txt: " << line << endl;
-            continue;
-        }
-
-        brand.erase(brand.find_last_not_of(" \t\n\r") + 1);
-        brand.erase(0, brand.find_first_not_of(" \t\n\r"));
-        countStr.erase(countStr.find_last_not_of(" \t\n\r") + 1);
-        countStr.erase(0, countStr.find_first_not_of(" \t\n\r"));
-
-        if (!isValidInteger(countStr)) {
-            cout << "Warning: Invalid car count in line " << lineNumber 
-                 << " in carsDB.txt: " << countStr << endl;
-            continue;
-        }
-
-        try {
+    
+    // Load cars
+    cars.clear();
+    ifstream carFile("carsDB.txt");
+    if (carFile.is_open()) {
+        string line;
+        while (getline(carFile, line)) {
+            if (line.empty()) continue;
+            
             Car car;
-            car.brand = brand;
-            car.availableCount = stoi(countStr);
-            if (car.availableCount < 0) {
-                cout << "Warning: Negative count in line " << lineNumber 
-                     << " ignored: " << line << endl;
-                continue;
-            }
+            size_t pos = line.find(',');
+            car.name = line.substr(0, pos);
+            car.count = stoi(line.substr(pos + 1));
+            
             cars.push_back(car);
-        } catch (const invalid_argument& e) {
-            cout << "Error: Invalid number format in line " << lineNumber 
-                 << " in carsDB.txt: " << countStr << endl;
-            continue;
-        } catch (const out_of_range& e) {
-            cout << "Error: Number out of range in line " << lineNumber 
-                 << " in carsDB.txt: " << countStr << endl;
-            continue;
         }
-    }
-
-    file.close();
-    return cars;
-}
-
-void saveAdmin(const Admin& admin) {
-    ofstream file("admin.txt");
-    if (file.is_open()) {
-        file << admin.username << "," << admin.password << endl;
-        file.close();
-    } else {
-        cout << "Error: Could not open admin.txt for writing." << endl;
+        carFile.close();
     }
 }
 
-void saveUsers(const vector<User>& users) {
-    ofstream file("usersDB.txt");
-    if (file.is_open()) {
-        for (const auto& user : users) {
-            file << user.username << "," << user.password << "," << user.accountBalance << ","
-                 << (user.hasBorrowRequest ? "1" : "0") << "," << user.requestedBrand << ","
-                 << (user.hasReturnRequest ? "1" : "0") << "," << user.borrowedBrand << endl;
+// Save data to files
+void saveData() {
+    // Save admin
+    ofstream adminFile("admin.txt");
+    if (adminFile.is_open()) {
+        adminFile << admin.username << "," << admin.password << endl;
+        adminFile.close();
+    }
+    
+    // Save users
+    ofstream userFile("usersDB.txt");
+    if (userFile.is_open()) {
+        for (const User& user : users) {
+            userFile << user.username << "," << user.password << "," << user.balance << ","
+                     << (user.wantsToBorrow ? "1" : "0") << "," << user.wantedCar << ","
+                     << (user.wantsToReturn ? "1" : "0") << "," << user.borrowedCar << endl;
         }
-        file.close();
-    } else {
-        cout << "Error: Could not open usersDB.txt for writing." << endl;
+        userFile.close();
     }
-}
-
-void saveCars(const vector<Car>& cars) {
-    ofstream file("carsDB.txt");
-    if (file.is_open()) {
-        for (const auto& car : cars) {
-            if (car.availableCount >= 0) {
-                file << car.brand << "," << car.availableCount << endl;
-            }
+    
+    // Save cars
+    ofstream carFile("carsDB.txt");
+    if (carFile.is_open()) {
+        for (const Car& car : cars) {
+            carFile << car.name << "," << car.count << endl;
         }
-        file.close();
-    } else {
-        cout << "Error: Could not open carsDB.txt for writing." << endl;
+        carFile.close();
     }
 }
 
-// Login Functions
-bool adminLogin(const Admin& admin) {
-    string inputUsername, inputPassword;
+// Check if admin login is correct
+bool checkAdminLogin() {
+    string username, password;
     cout << "Enter admin username: ";
-    cin >> inputUsername;
+    cin >> username;
     cout << "Enter admin password: ";
-    cin >> inputPassword;
-    if (inputUsername == admin.username && inputPassword == admin.password) {
-        cout << "Admin login successful!\n";
+    cin >> password;
+    
+    if (username == admin.username && password == admin.password) {
+        cout << "Login successful!\n";
         return true;
     } else {
-        cout << "Invalid username or password.\n";
+        cout << "Wrong username or password.\n";
         return false;
     }
 }
 
-int userLogin(const vector<User>& users) {
-    string inputUsername, inputPassword;
+// Check if user login is correct and return user index
+int checkUserLogin() {
+    string username, password;
     cout << "Enter username: ";
-    cin >> inputUsername;
+    cin >> username;
     cout << "Enter password: ";
-    cin >> inputPassword;
-    for (size_t i = 0; i < users.size(); ++i) {
-        if (users[i].username == inputUsername && users[i].password == inputPassword) {
-            cout << "User login successful!\n";
+    cin >> password;
+    
+    for (int i = 0; i < users.size(); i++) {
+        if (users[i].username == username && users[i].password == password) {
+            cout << "Login successful!\n";
             return i;
         }
     }
-    cout << "Invalid username or password.\n";
+    cout << "Wrong username or password.\n";
     return -1;
 }
 
-// Admin Functions
-void registerUser(vector<User>& users) {
+// Admin functions
+void addNewUser() {
     User newUser;
     cout << "Enter new username: ";
     cin >> newUser.username;
-    for (const auto& user : users) {
+    
+    // Check if username already exists
+    for (const User& user : users) {
         if (user.username == newUser.username) {
-            cout << "Username already exists.\n";
+            cout << "Username already exists!\n";
             return;
         }
     }
+    
     cout << "Enter new password: ";
     cin >> newUser.password;
-    newUser.accountBalance = 10500.0;
-    newUser.hasBorrowRequest = false;
-    newUser.requestedBrand = "";
-    newUser.hasReturnRequest = false;
-    newUser.borrowedBrand = "";
+    
+    newUser.balance = 10500.0;
+    newUser.wantsToBorrow = false;
+    newUser.wantedCar = "";
+    newUser.wantsToReturn = false;
+    newUser.borrowedCar = "";
+    
     users.push_back(newUser);
-    cout << "User registered with 10500 shillings.\n";
+    cout << "User added with 10500 shillings!\n";
 }
 
-void approveBorrowRequests(vector<User>& users, vector<Car>& cars) {
-    for (auto& user : users) {
-        if (user.hasBorrowRequest) {
-            cout << "User " << user.username << " requests " << user.requestedBrand << endl;
+void approveCarRequests() {
+    for (User& user : users) {
+        if (user.wantsToBorrow) {
+            cout << "User " << user.username << " wants to borrow " << user.wantedCar << endl;
             cout << "Approve? (y/n): ";
-            string approve;
-            cin >> approve;
-            if (approve == "y") {
-                auto it = find_if(cars.begin(), cars.end(), 
-                    [&user](Car& c) { return c.brand == user.requestedBrand; });
-                if (it != cars.end() && it->availableCount > 0) {
-                    it->availableCount--;
-                    user.borrowedBrand = user.requestedBrand;
-                    user.hasBorrowRequest = false;
-                    user.requestedBrand = "";
-                    cout << "Borrow request approved.\n";
-                } else {
+            string answer;
+            cin >> answer;
+            
+            if (answer == "y") {
+                // Find the car
+                bool found = false;
+                for (Car& car : cars) {
+                    if (car.name == user.wantedCar && car.count > 0) {
+                        car.count--;
+                        user.borrowedCar = user.wantedCar;
+                        user.wantsToBorrow = false;
+                        user.wantedCar = "";
+                        cout << "Request approved!\n";
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
                     cout << "Car not available.\n";
                 }
             }
@@ -274,146 +233,180 @@ void approveBorrowRequests(vector<User>& users, vector<Car>& cars) {
     }
 }
 
-void acceptReturnedCars(vector<User>& users, vector<Car>& cars) {
-    for (auto& user : users) {
-        if (user.hasReturnRequest) {
-            cout << "User " << user.username << " returns " << user.borrowedBrand << endl;
+void acceptReturnedCars() {
+    for (User& user : users) {
+        if (user.wantsToReturn) {
+            cout << "User " << user.username << " wants to return " << user.borrowedCar << endl;
             cout << "Accept? (y/n): ";
-            string accept;
-            cin >> accept;
-            if (accept == "y") {
-                auto it = find_if(cars.begin(), cars.end(), 
-                    [&user](Car& c) { return c.brand == user.borrowedBrand; });
-                if (it != cars.end()) {
-                    it->availableCount++;
-                    user.borrowedBrand = "";
-                    user.hasReturnRequest = false;
-                    cout << "Return accepted.\n";
+            string answer;
+            cin >> answer;
+            
+            if (answer == "y") {
+                // Find the car and add it back
+                for (Car& car : cars) {
+                    if (car.name == user.borrowedCar) {
+                        car.count++;
+                        user.borrowedCar = "";
+                        user.wantsToReturn = false;
+                        cout << "Return accepted!\n";
+                        break;
+                    }
                 }
             }
         }
     }
 }
 
-void changeAdminPassword(Admin& admin) {
+void changeAdminPassword() {
     cout << "Enter new password: ";
     cin >> admin.password;
-    cout << "Admin password updated.\n";
+    cout << "Password changed!\n";
 }
 
-// User Functions
-void viewProfile(const User& user) {
+// User functions
+void showUserProfile(const User& user) {
     cout << "Username: " << user.username << endl;
-    cout << "Balance: " << user.accountBalance << " shillings\n";
+    cout << "Balance: " << user.balance << " shillings" << endl;
+    if (!user.borrowedCar.empty()) {
+        cout << "Currently borrowed: " << user.borrowedCar << endl;
+    }
 }
 
-void requestRentCar(User& user, const vector<Car>& cars) {
-    if (user.hasBorrowRequest || !user.borrowedBrand.empty()) {
-        cout << "You have a pending request or a car already.\n";
+void requestCar(User& user) {
+    if (user.wantsToBorrow || !user.borrowedCar.empty()) {
+        cout << "You already have a request or a borrowed car!\n";
         return;
     }
-    if (user.accountBalance < 5000) {
-        cout << "Need at least 5000 shillings to rent.\n";
+    
+    if (user.balance < 5000) {
+        cout << "You need at least 5000 shillings to rent a car!\n";
         return;
     }
+    
     cout << "Available cars:\n";
-    for (const auto& car : cars) {
-        cout << car.brand << ": " << car.availableCount << endl;
+    for (const Car& car : cars) {
+        if (car.count > 0) {
+            cout << car.name << ": " << car.count << " available" << endl;
+        }
     }
-    cout << "Enter brand to rent: ";
-    string brand;
-    cin >> brand;
-    auto it = find_if(cars.begin(), cars.end(), 
-        [&brand](const Car& c) { return c.brand == brand && c.availableCount > 0; });
-    if (it != cars.end()) {
-        user.hasBorrowRequest = true;
-        user.requestedBrand = brand;
-        cout << "Request submitted for " << brand << ".\n";
-    } else {
-        cout << "Car not available.\n";
+    
+    cout << "Which car do you want? ";
+    string carName;
+    cin >> carName;
+    
+    // Check if car is available
+    for (const Car& car : cars) {
+        if (car.name == carName && car.count > 0) {
+            user.wantsToBorrow = true;
+            user.wantedCar = carName;
+            cout << "Request sent for " << carName << "!\n";
+            return;
+        }
     }
+    cout << "Car not available!\n";
 }
 
-void requestReturnCar(User& user) {
-    if (user.borrowedBrand.empty()) {
-        cout << "No car to return.\n";
+void requestReturn(User& user) {
+    if (user.borrowedCar.empty()) {
+        cout << "You don't have any car to return!\n";
         return;
     }
-    user.hasReturnRequest = true;
-    cout << "Return request submitted.\n";
+    
+    user.wantsToReturn = true;
+    cout << "Return request sent!\n";
 }
 
 void changeUserPassword(User& user) {
     cout << "Enter new password: ";
     cin >> user.password;
-    cout << "Password updated.\n";
+    cout << "Password changed!\n";
 }
 
-// Main Program
+// Main program
 int main() {
-    Admin admin = loadAdmin();
-    vector<User> users = loadUsers();
-    vector<Car> cars = loadCars();
-
-    bool running = true;
-    while (running) {
+    loadData();
+    
+    while (true) {
         cout << "\n=== Car Rental System ===\n";
-        cout << "1. Admin Login\n2. User Login\n3. Exit\n";
-        cout << "Choice: ";
+        cout << "1. Admin Login\n";
+        cout << "2. User Login\n";
+        cout << "3. Exit\n";
+        cout << "Choose: ";
+        
         int choice;
         cin >> choice;
-
+        
         if (choice == 1) {
-            if (adminLogin(admin)) {
-                bool adminLoggedIn = true;
-                while (adminLoggedIn) {
+            // Admin menu
+            if (checkAdminLogin()) {
+                while (true) {
                     cout << "\n=== Admin Menu ===\n";
-                    cout << "1. Register User\n2. Approve Borrow Requests\n3. Accept Returned Cars\n";
-                    cout << "4. Change Password\n5. Logout\n";
-                    cout << "Choice: ";
+                    cout << "1. Add New User\n";
+                    cout << "2. Approve Car Requests\n";
+                    cout << "3. Accept Returned Cars\n";
+                    cout << "4. Change Password\n";
+                    cout << "5. Logout\n";
+                    cout << "Choose: ";
+                    
                     int adminChoice;
                     cin >> adminChoice;
-                    switch (adminChoice) {
-                        case 1: registerUser(users); break;
-                        case 2: approveBorrowRequests(users, cars); break;
-                        case 3: acceptReturnedCars(users, cars); break;
-                        case 4: changeAdminPassword(admin); break;
-                        case 5: adminLoggedIn = false; cout << "Logged out.\n"; break;
-                        default: cout << "Invalid choice.\n";
+                    
+                    if (adminChoice == 1) {
+                        addNewUser();
+                    } else if (adminChoice == 2) {
+                        approveCarRequests();
+                    } else if (adminChoice == 3) {
+                        acceptReturnedCars();
+                    } else if (adminChoice == 4) {
+                        changeAdminPassword();
+                    } else if (adminChoice == 5) {
+                        cout << "Logged out!\n";
+                        break;
+                    } else {
+                        cout << "Invalid choice!\n";
                     }
                 }
             }
         } else if (choice == 2) {
-            int userIndex = userLogin(users);
+            // User menu
+            int userIndex = checkUserLogin();
             if (userIndex != -1) {
-                bool userLoggedIn = true;
-                while (userLoggedIn) {
+                while (true) {
                     cout << "\n=== User Menu ===\n";
-                    cout << "1. View Profile\n2. Request to Rent Car\n3. Request to Return Car\n";
-                    cout << "4. Change Password\n5. Logout\n";
-                    cout << "Choice: ";
+                    cout << "1. View Profile\n";
+                    cout << "2. Request to Rent Car\n";
+                    cout << "3. Request to Return Car\n";
+                    cout << "4. Change Password\n";
+                    cout << "5. Logout\n";
+                    cout << "Choose: ";
+                    
                     int userChoice;
                     cin >> userChoice;
-                    switch (userChoice) {
-                        case 1: viewProfile(users[userIndex]); break;
-                        case 2: requestRentCar(users[userIndex], cars); break;
-                        case 3: requestReturnCar(users[userIndex]); break;
-                        case 4: changeUserPassword(users[userIndex]); break;
-                        case 5: userLoggedIn = false; cout << "Logged out.\n"; break;
-                        default: cout << "Invalid choice.\n";
+                    
+                    if (userChoice == 1) {
+                        showUserProfile(users[userIndex]);
+                    } else if (userChoice == 2) {
+                        requestCar(users[userIndex]);
+                    } else if (userChoice == 3) {
+                        requestReturn(users[userIndex]);
+                    } else if (userChoice == 4) {
+                        changeUserPassword(users[userIndex]);
+                    } else if (userChoice == 5) {
+                        cout << "Logged out!\n";
+                        break;
+                    } else {
+                        cout << "Invalid choice!\n";
                     }
                 }
             }
         } else if (choice == 3) {
-            running = false;
+            cout << "Goodbye!\n";
+            break;
         } else {
-            cout << "Invalid choice.\n";
+            cout << "Invalid choice!\n";
         }
     }
-
-    saveAdmin(admin);
-    saveUsers(users);
-    saveCars(cars);
-    cout << "Data saved. Exiting...\n";
+    
+    saveData();
     return 0;
 }
